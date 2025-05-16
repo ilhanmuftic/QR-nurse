@@ -89,11 +89,43 @@ export default function HomeScreen() {
     }
   };
 
-  const handleAddToQueue = () => {
-    Alert.alert("Added to Queue", "Patient has been added to the queue");
+  const handleAddToQueue = async () => {
+    if (!patientData) {
+      Alert.alert("Error", "No patient data available to add to the queue.");
+      return;
+    }
+
+    const payload = {
+      doctorId: "e23cfc0d-efca-459e-a751-1d131a32b6dc", // Replace with actual doctorId as needed
+      jmbg: patientData.jmbg,
+      hospitalId: 1, // Replace with the actual hospital ID
+      firstName: patientData.name,
+      lastName: patientData.surname,
+    };
+
+    try {
+      const response = await fetch('https://hkmeashdtfncnsxqhgob.functions.supabase.co/insert_to_queue', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        Alert.alert("Success", "Patient has been added to the queue.");
+      } else {
+        const errorData = await response.json();
+        Alert.alert("Error", `Failed to add patient to the queue: ${errorData.message || response.statusText}`);
+      }
+    } catch (error) {
+      Alert.alert("Error", `An error occurred: ${error}`);
+    }
+
     setShowPatientScreen(false);
     setScanned(false);
   };
+
 
   const handleAddParameters = () => {
     setShowPatientScreen(false);
