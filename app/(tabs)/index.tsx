@@ -226,7 +226,7 @@ export default function HomeScreen() {
               style={[styles.actionButton, styles.submitButton]}
               onPress={handleSubmitParameters}
             >
-              <Text style={styles.buttonText}>Submit Parameters</Text>
+              <Text style={styles.buttonText}>Submit</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -237,7 +237,6 @@ export default function HomeScreen() {
 
 
 const styles = StyleSheet.create({
-  // ... (keep all your existing styles)
   additionalCode: {
     fontSize: 14,
     color: '#666',
@@ -302,7 +301,6 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 5,
     alignItems: 'center',
-    flex: 1,
     marginHorizontal: 5,
   },
   queueButton: {
