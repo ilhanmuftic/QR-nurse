@@ -47,19 +47,17 @@ export default function HomeScreen() {
         facing={facing}
         barcodeScannerSettings={{
           barcodeTypes: [
-            'aztec',
-            'ean13',
-            'ean8',
-            'qr',
-            'pdf417',
-            'upc_a',
-            'upc_e',
+
+            // 'qr',
+            // 'pdf417',
+            // 'upc_a',
+            // 'upc_e',
             'datamatrix',
-            'code39',
-            'code93',
-            'itf14',
-            'codabar',
-            'code128',
+            // 'code39',
+            // 'code93',
+            // 'itf14',
+            // 'codabar',
+            // 'code128',
           ],
         }}
         onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
