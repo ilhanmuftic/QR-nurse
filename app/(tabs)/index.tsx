@@ -1,6 +1,7 @@
 import { CameraView, CameraType, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import { useState } from 'react';
 import { Button, StyleSheet, Text, TouchableOpacity, View, Alert, Modal, TextInput } from 'react-native';
+import { supabase } from '../../utils/supabase';
 
 interface PatientData {
   jmbg: string;
@@ -25,7 +26,9 @@ export default function HomeScreen() {
     height: '',
     bloodPressure: '',
     temperature: '',
+    pulse: '',
   });
+  const [isLoading, setIsLoading] = useState(false);
 
   if (!permission) {
     return <View />;
@@ -46,17 +49,14 @@ export default function HomeScreen() {
 
   const parsePatientData = (data: string): PatientData | null => {
     try {
-      // Split by % delimiter
       const parts = data.split('%');
-
       if (parts.length >= 5) {
         return {
-          jmbg: parts[0],        // First part is JMBG
-          name: parts[1],         // Second part is name
-          surname: parts[2],      // Third part is surname
-          dateOfBirth: parts[3],  // Fourth part is date of birth
-          gender: parts[4],       // Fifth part is gender
-          // The remaining parts appear to be additional codes/info
+          jmbg: parts[0],
+          name: parts[1],
+          surname: parts[2],
+          dateOfBirth: parts[3],
+          gender: parts[4],
           additionalCode1: parts[5] || '',
           additionalCode2: parts[6] || '',
           additionalCode3: parts[7] || ''
@@ -79,20 +79,39 @@ export default function HomeScreen() {
       Alert.alert(
         "Invalid QR Code",
         "The scanned QR code doesn't contain valid patient data",
-        [
-          {
-            text: "OK",
-            onPress: () => setScanned(false),
-          },
-        ]
+        [{ text: "OK", onPress: () => setScanned(false) }]
       );
     }
   };
 
-  const handleAddToQueue = () => {
-    Alert.alert("Added to Queue", "Patient has been added to the queue");
-    setShowPatientScreen(false);
-    setScanned(false);
+  const handleAddToQueue = async () => {
+    if (!patientData) return;
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from('queue')
+        .insert([{
+          jmbg: patientData.jmbg,
+          first_name: patientData.name,
+          last_name: patientData.surname,
+          date_of_birth: patientData.dateOfBirth,
+          gender: patientData.gender,
+          status: 'waiting',
+          created_at: new Date().toISOString()
+        }]);
+
+      if (error) throw error;
+
+      Alert.alert("Success", "Patient added to queue");
+      setShowPatientScreen(false);
+      setScanned(false);
+    } catch (error) {
+      Alert.alert("Error", "Failed to add patient to queue");
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleAddParameters = () => {
@@ -100,10 +119,56 @@ export default function HomeScreen() {
     setShowParametersForm(true);
   };
 
-  const handleSubmitParameters = () => {
-    Alert.alert("Parameters Saved", "Patient parameters have been recorded");
-    setShowParametersForm(false);
-    setScanned(false);
+  const handleSubmitParameters = async () => {
+    if (!patientData) return;
+
+    setIsLoading(true);
+    try {
+      // First, check if patient exists or create them
+      const { error: upsertError } = await supabase
+        .from('patients')
+        .upsert({
+          jmbg: patientData.jmbg,
+          name: patientData.name,
+          surname: patientData.surname,
+          date_of_birth: patientData.dateOfBirth,
+          gender: patientData.gender,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'jmbg' });
+
+      if (upsertError) throw upsertError;
+
+      // Then add the parameters
+      const { error: paramsError } = await supabase
+        .from('patient_parameters')
+        .insert({
+          patient_jmbg: patientData.jmbg,
+          weight: parameters.weight,
+          height: parameters.height,
+          blood_pressure: parameters.bloodPressure,
+          temperature: parameters.temperature,
+          pulse: parameters.pulse,
+          recorded_at: new Date().toISOString()
+        });
+
+      if (paramsError) throw paramsError;
+
+      Alert.alert("Success", "Patient parameters saved");
+      setShowParametersForm(false);
+      setScanned(false);
+      setParameters({
+        weight: '',
+        height: '',
+        bloodPressure: '',
+        temperature: '',
+        pulse: '',
+      });
+    } catch (error) {
+      Alert.alert("Error", "Failed to save parameters");
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -146,7 +211,6 @@ export default function HomeScreen() {
                 <Text style={styles.patientText}>Date of Birth: {patientData.dateOfBirth}</Text>
                 <Text style={styles.patientText}>Gender: {patientData.gender}</Text>
 
-                {/* Display additional codes if they exist */}
                 {patientData.additionalCode1 && (
                   <Text style={styles.additionalCode}>Code 1: {patientData.additionalCode1}</Text>
                 )}
@@ -159,14 +223,18 @@ export default function HomeScreen() {
 
                 <View style={styles.buttonGroup}>
                   <TouchableOpacity
-                    style={[styles.actionButton, styles.queueButton]}
+                    style={[styles.actionButton, styles.queueButton, isLoading && styles.disabledButton]}
                     onPress={handleAddToQueue}
+                    disabled={isLoading}
                   >
-                    <Text style={styles.buttonText}>Add to Queue</Text>
+                    <Text style={styles.buttonText}>
+                      {isLoading ? 'Adding...' : 'Add to Queue'}
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.actionButton, styles.parametersButton]}
+                    style={[styles.actionButton, styles.parametersButton, isLoading && styles.disabledButton]}
                     onPress={handleAddParameters}
+                    disabled={isLoading}
                   >
                     <Text style={styles.buttonText}>Add Parameters</Text>
                   </TouchableOpacity>
@@ -222,11 +290,22 @@ export default function HomeScreen() {
               onChangeText={(text) => setParameters({ ...parameters, temperature: text })}
             />
 
+            <TextInput
+              style={styles.input}
+              placeholder="Pulse (bpm)"
+              keyboardType="numeric"
+              value={parameters.pulse}
+              onChangeText={(text) => setParameters({ ...parameters, pulse: text })}
+            />
+
             <TouchableOpacity
-              style={[styles.actionButton, styles.submitButton]}
+              style={[styles.actionButton, styles.submitButton, isLoading && styles.disabledButton]}
               onPress={handleSubmitParameters}
+              disabled={isLoading}
             >
-              <Text style={styles.buttonText}>Submit</Text>
+              <Text style={styles.buttonText}>
+                {isLoading ? 'Saving...' : 'Submit Parameters'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -237,6 +316,9 @@ export default function HomeScreen() {
 
 
 const styles = StyleSheet.create({
+  disabledButton: {
+    opacity: 0.6,
+  },
   additionalCode: {
     fontSize: 14,
     color: '#666',
