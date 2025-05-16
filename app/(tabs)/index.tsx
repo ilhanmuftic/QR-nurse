@@ -132,11 +132,59 @@ export default function HomeScreen() {
     setShowParametersForm(true);
   };
 
-  const handleSubmitParameters = () => {
-    Alert.alert("Parameters Saved", "Patient parameters have been recorded");
+  const handleSubmitParameters = async () => {
+    if (!patientData) {
+      Alert.alert("Error", "No patient data available.");
+      return;
+    }
+
+    const parameterMappings = [
+      { type: "weight", value: parameters.weight, unit: "kg" },
+      { type: "height", value: parameters.height, unit: "cm" },
+      { type: "blood_pressure", value: parameters.bloodPressure, unit: "mmHg" },
+      { type: "temperature", value: parameters.temperature, unit: "°C" },
+    ];
+
+    try {
+      for (const param of parameterMappings) {
+        console.log(JSON.stringify({
+          hospital_id: 1,
+          type: param.type,
+          value: param.value,
+          unit: param.unit,
+          notes: "Routine test",
+          jmbg: patientData.jmbg,
+        }), "MAJAAJAJAJAJAJJAS")
+        const response = await fetch('https://hkmeashdtfncnsxqhgob.functions.supabase.co/insert_to_parameters', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            hospital_id: 1,
+            type: param.type,
+            value: param.value,
+            unit: param.unit,
+            notes: "Routine test",
+            jmbg: patientData.jmbg,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || `Failed to submit ${param.type}`);
+        }
+      }
+
+      Alert.alert("Success", "All parameters have been submitted.");
+    } catch (error: any) {
+      Alert.alert("Error", `Failed to submit parameters: ${error.message}`);
+    }
+
     setShowParametersForm(false);
     setScanned(false);
   };
+
 
   return (
     <View style={styles.container}>
